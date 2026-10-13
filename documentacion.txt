@@ -1,0 +1,57 @@
+Principalmente este proyecto fue pensado para una materia en la facultad y que su objetivo era ser un modelo vista controlador en java.
+Este sistema es un organizador de tareas para proyectos.
+
+Estado del entorno comprobado el 28/09/2026:
+- Hay un JDK 21 instalado en C:\Program Files\Java\jdk-21. `java -version` y `javac -version` responden correctamente; no hace falta instalar otro JDK para compilar este proyecto.
+- El código editable está en src/ y tiene extensión .java. Los archivos .class de build/classes y el .jar de dist son binarios compilados; ver símbolos raros al abrirlos como texto es normal.
+- Los fuentes actuales compilan con `javac -encoding UTF-8 -d build/classes` seguido de la lista de archivos .java de src/.
+- El proyecto de NetBeans usa Java 21 y referencia dist/lib/mysql-connector-j-9.4.0.jar. Verificado el 06/10/2026: el archivo está disponible en esta copia local del proyecto y se puede leer como un JAR válido; la dependencia del conector queda resuelta para la aplicación actual. Esto no confirma todavía que la conexión a MySQL funcione con la base y credenciales configuradas.
+- El puerto 3306 de localhost responde, pero no se comprobó el nombre de la base, sus tablas ni las credenciales. La conexión actual usa root sin contraseña en src/gestor/modelo/Conexiondb.java.
+- Git está inicializado en esta carpeta y conectado al repositorio remoto de GitHub; mantener commits pequeños antes y durante la migración a Spring Boot y React.
+
+Para abrirlo en NetBeans: Archivo > Abrir proyecto y seleccionar esta carpeta. Configurar JDK 21 como plataforma Java del proyecto. Abrir src/gestortareas/Main.java o los demás archivos .java para leer o editar código. Para preparar la base, ejecutar database/schema.sql en MySQL. La interfaz Swing es la aplicación existente y solo sirve para verificar el estado anterior a la migración.
+
+La idea principal de este proyecto es que podamos llevar un control sobre tareas que se realizan en un proyecto, necesitamos contar con roles(administradores,jefes,desarrolladores)
+
+
+Está construido en Java con el patrón Modelo-Vista-Controlador (MVC) y utiliza MySQL como motor de base de datos. Java se mantendrá como backend; React será la interfaz principal y Swing se retirará.
+Ahora mismo 28/09/2026 la idea es:
+1-Hacer reproducible la ejecución actual: resolver la dependencia del conector y documentar o recuperar el esquema de MySQL.
+2-Acordar el modelo de negocio: proyectos, objetivo, tareas, responsables, estados y permisos.
+3-Crear una API Java con Spring Boot y pruebas; allí quedan las reglas y el acceso a MySQL.
+4-Construir la interfaz principal en React consumiendo esa API: proyectos y avance hacia objetivos, más tareas en tabla o tablero.
+5-Retirar la vista Swing; no será una interfaz alternativa del producto final.
+6-Documentar la arquitectura propuesta con una vista lógica (componentes y responsabilidades) y una vista de despliegue (dónde y cómo se ejecutarán frontend, API y base de datos). Hacerlo al definir la arquitectura de despliegue, sin asumir por ahora un API Gateway.
+7-Diseñar en Miro los diagramas de arquitectura, incluyendo las vistas lógica y de despliegue, y revisarlos antes de implementar la solución.
+8-Documentar y explorar la API REST con OpenAPI/Swagger UI cuando se implemente Spring Boot; Swagger sirve para describir y probar los endpoints, no para crear los diagramas de arquitectura.
+
+Esquema MySQL contrastado con el volcado recibido el 28/09/2026:
+- usuarios: id_usuario, nombre_usuario, nombre_completo, email, password, rol.
+- proyectos: id_proyecto, id_administrador, nombre, descripcion, fecha_inicio, fecha_fin_estimada.
+- tareas: id_tarea, id_proyecto, id_asignado, id_asignador, titulo, descripcion, fecha_vencimiento, estado, prioridad.
+
+La estructura sin datos de usuarios está guardada en database/schema.sql. El esquema para instalaciones nuevas exige que cada tarea tenga un proyecto y valida la relación con una clave foránea. También modela la delegación mediante proyecto_jefes. Para bases existentes, database/migrations/001_add_project_reference_to_tasks.sql agrega la relación tarea-proyecto inicialmente como nullable; hay que asignar un proyecto válido a cada tarea existente y luego ejecutar database/migrations/002_require_project_for_tasks.sql para exigirlo. database/migrations/003_create_project_chiefs.sql crea la tabla de delegaciones, que deberá poblarse con jefes y proyectos existentes. El volcado original incluye cuentas de prueba con contraseñas en texto plano; no se incorpora al repositorio. Esas contraseñas deben cambiarse si pertenecen a cuentas que todavía se usan.
+
+Decisión de modelo (30/09/2026): toda tarea pertenece a un proyecto. La interfaz React ya exige seleccionar uno, pero todavía trabaja con datos de demostración. La API deberá requerir el identificador del proyecto al crear una tarea y validar que el proyecto exista. La aplicación Swing aún no envía ese identificador; por eso no debe aplicarse la migración que hace la columna obligatoria mientras Swing siga creando tareas en esa base, a menos que primero se adapte su formulario y DAO. Por el mismo motivo, el esquema para instalaciones nuevas está pensado para el backend REST: el alta Swing fallará si se conecta a una base creada con este esquema hasta que se adapte o se retire.
+
+Decisión de roles (30/09/2026): DESARROLLADOR reemplaza a COLABORADOR y es quien realiza las tareas; JEFE asigna tareas y controla su seguimiento; ADMINISTRADOR crea proyectos y los delega a los jefes. La API deberá validar estas responsabilidades y limitar quién puede asignar tareas o delegar proyectos. La columna usuarios.rol ya puede guardar estos nombres, pero los datos existentes y los formularios/código que usan COLABORADOR tendrán que migrarse al nuevo valor DESARROLLADOR.
+
+Brechas entre el esquema actual y el modelo deseado:
+- La regla tarea-proyecto ya está definida; falta migrar las bases existentes, asignar proyectos a las tareas actuales y exigir la relación al activar la API.
+- proyectos.id_administrador identifica al administrador creador. La delegación admite varios jefes por proyecto y un jefe puede recibir varios proyectos; proyecto_jefes representa esa relación. La API debe verificar que cada usuario delegado tenga el rol JEFE.
+- Los roles actuales en datos/código son ADMINISTRADOR y COLABORADOR; el modelo acordado usa ADMINISTRADOR, JEFE y DESARROLLADOR. Falta migrar los usuarios COLABORADOR a DESARROLLADOR.
+- En tareas, id_asignado representa al desarrollador responsable e id_asignador al jefe que asigna. Hoy la base solo valida id_asignado; id_asignador es nullable y no tiene clave foránea.
+- El DAO de tareas no consulta proyectos ni fecha_vencimiento; el esquema tiene esos datos, pero la aplicación actual no los aprovecha.
+- El DAO de usuario compara la contraseña directamente, consistente con el volcado, que contiene contraseñas sin hash. Antes de habilitar React/API debe migrarse el almacenamiento a hashes de contraseña.
+
+
+Interfaz React (prototipo, 29/09/2026):
+- La nueva interfaz está separada del proyecto NetBeans en la carpeta frontend/. Esto permite abrir y ejecutar el frontend sin cambiar la ubicación ni la configuración de la aplicación Swing.
+- Para iniciarla desde PowerShell, ubicarse en la carpeta del proyecto y ejecutar:
+	cd frontend
+	npm install
+	npm run dev
+- Vite informa la dirección local al iniciar; normalmente es http://localhost:5173/. Para generar la versión de producción: npm run build.
+- El tablero implementa resumen, proyectos con avance, tareas en lista o tablero, filtros por estado, búsqueda y alta/cambio de estado en memoria.
+- Los proyectos, usuarios y tareas mostrados son datos de demostración definidos en frontend/src/App.jsx. Los cambios no se guardan en MySQL ni persisten al recargar.
+- La interfaz todavía no está conectada a una API. Para usar información real, primero debe implementarse el backend REST descrito arriba y luego sustituir los datos de demostración por llamadas a esa API. La navegación de colaboradores y el selector de espacio de trabajo también son solo visuales en esta etapa.

@@ -19,6 +19,22 @@
 *.tar.gz
 *.rar
 
+# NetBeans and build outputs
+/build/
+/dist/*
+!/dist/lib/
+!/dist/lib/mysql-connector-j-9.4.0.jar
+/nbproject/private/
+
+# Frontend dependencies and generated output
+/frontend/node_modules/
+/frontend/dist/
+
+# Local environment settings
+.env
+.env.*
+!.env.example
+
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
